@@ -1,0 +1,33 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Phishing Education</title>
+    <link rel="stylesheet" type="text/css" href="{{ url_for('static', filename='style.css') }}">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+</head>
+<body>
+    <div class="education-container">
+        <h1>You've Been Phished!</h1>
+        <div class="education-content">
+            <h2>What Happened?</h2>
+            <p>This was a simulated phishing attempt. In a real attack, your credentials would now be in the hands of attackers.</p>
+            
+            <h2>Red Flags You Should Have Noticed:</h2>
+            <ul>
+                <li>The URL in your address bar wasn't the official Google domain</li>
+                <li>There was no HTTPS security indicator</li>
+                <li>The page may have had subtle differences from the real login page</li>
+            </ul>
+            
+            <h2>How to Protect Yourself:</h2>
+            <ul>
+                <li>Always check the URL before entering credentials</li>
+                <li>Look for HTTPS and the lock icon in your browser</li>
+                <li>Enable two-factor authentication when possible</li>
+                <li>Use a password manager to avoid manually typing passwords</li>
+            </ul>
+        </div>
+        <a href="/" class="return-btn">Return to Home</a>
+    </div>
+</body>
+</html>
