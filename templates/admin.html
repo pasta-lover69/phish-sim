@@ -1,41 +1,67 @@
 <!DOCTYPE html>
 <html>
-<head>
+  <head>
     <title>Admin Dashboard - Phishing Simulation</title>
-    <link rel="stylesheet" type="text/css" href="{{ url_for('static', filename='style.css') }}">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-</head>
-<body>
+    <link
+      rel="stylesheet"
+      type="text/css"
+      href="{{ url_for('static', filename='style.css') }}"
+    />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  </head>
+  <body>
     <div class="admin-container">
-        <div class="admin-header">
-            <h2 class="admin-title">Captured Credentials</h2>
-            <a href="{{ url_for('logout') }}" class="logout-btn">Logout</a>
+      <div class="admin-header">
+        <h2 class="admin-title">Captured Credentials</h2>
+        <a href="{{ url_for('logout') }}" class="logout-btn">Logout</a>
+      </div>
+
+      {% if data %}
+      <table class="admin-table">
+        <thead>
+          <tr>
+            <th>Email</th>
+            <th>Password</th>
+            <th>IP Address</th>
+            <th>Timestamp</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for row in data %}
+          <tr>
+            <td>{{ row[0] }}</td>
+            <td>{{ row[1] }}</td>
+            <td>{{ row[2] }}</td>
+            <td>{{ row[3] }}</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+      {% else %}
+      <p>No credentials captured yet.</p>
+      {% endif %}
+
+      <div class="stats-container">
+        <h3>Phishing Statistics</h3>
+        <div class="stats-grid">
+          <div class="stat-card">
+            <span class="stat-number">{{ stats.total_attempts }}</span>
+            <span class="stat-label">Total Visits</span>
+          </div>
+          <div class="stat-card">
+            <span class="stat-number">{{ stats.success_rate }}%</span>
+            <span class="stat-label">Success Rate</span>
+          </div>
+          <div class="stat-card">
+            <span class="stat-number">{{ stats.unique_ips }}</span>
+            <span class="stat-label">Unique IPs</span>
+          </div>
+          <div class="stat-card">
+            <span class="stat-number">{{ stats.today_attempts }}</span>
+            <span class="stat-label">Today's Attempts</span>
+          </div>
         </div>
-        
-        {% if data %}
-        <table class="admin-table">
-            <thead>
-                <tr>
-                    <th>Email</th>
-                    <th>Password</th>
-                    <th>IP Address</th>
-                    <th>Timestamp</th>
-                </tr>
-            </thead>
-            <tbody>
-                {% for row in data %}
-                <tr>
-                    <td>{{ row[0] }}</td>
-                    <td>{{ row[1] }}</td>
-                    <td>{{ row[2] }}</td>
-                    <td>{{ row[3] }}</td>
-                </tr>
-                {% endfor %}
-            </tbody>
-        </table>
-        {% else %}
-        <p>No credentials captured yet.</p>
-        {% endif %}
+      </div>
     </div>
-</body>
+  </body>
 </html>
