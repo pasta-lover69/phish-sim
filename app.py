@@ -1,5 +1,8 @@
 from flask import Flask, render_template, request, redirect, url_for, session
 import datetime
+import smtplib
+from email.mime.text import MIMEText
+from email.mime.multipart import MIMEMultipart
 
 app = Flask(__name__)
 app.secret_key = "phish_sim_secret_key"  # Add a secret key for sessions
@@ -70,6 +73,32 @@ def phishing_template(template_name):
         return render_template(templates[template_name])
     else:
         return redirect(url_for('login'))
+
+@app.route('/admin/campaign', methods=['GET', 'POST'])
+def campaign():
+    if not session.get('logged_in'):
+        return redirect(url_for('admin_login'))
+    
+    if request.method == 'POST':
+        # Get campaign details from form
+        recipients = request.form.get('recipients').split(',')
+        subject = request.form.get('subject')
+        message = request.form.get('message')
+        template = request.form.get('template')
+        
+        # Save campaign to database or file
+        # ...
+        
+        # Send emails (in a real app, you'd use a task queue)
+        campaign_url = url_for('phishing_template', template_name=template, _external=True)
+        
+        # Just store the campaign details for demo
+        with open('campaigns.txt', 'a') as f:
+            f.write(f"Campaign: {subject}, Recipients: {len(recipients)}, Template: {template}, Time: {datetime.datetime.now()}\n")
+        
+        return redirect(url_for('admin'))
+    
+    return render_template('campaign.html')
 
 if __name__ == '__main__':
     app.run(debug=True)
