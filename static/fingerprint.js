@@ -11,7 +11,7 @@ function collectBrowserData() {
         referrer: document.referrer
     };
     
-    // Send the data with the form
+    // Send the data uban ang form
     document.getElementById('browserData').value = JSON.stringify(data);
 }
 
