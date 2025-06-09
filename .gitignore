@@ -1,0 +1,42 @@
+# Captured phishing simulation data
+captured_data.txt
+
+# Python cache files
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Flask instance folder
+instance/
+
+# Environment variables
+.env
+.venv
+env/
+venv/
+
+# IDE files
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS generated files
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# Logs
+*.log
+
+# Database files (if you switch to SQLite later)
+*.db
+*.sqlite
+
+# Any backup files
+*.bak
+*.backup
