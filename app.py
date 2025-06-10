@@ -10,6 +10,9 @@ from functools import wraps
 # Load environment variables
 load_dotenv()
 
+# Apply nest_asyncio for better asyncio supot
+nest_asyncio.apply()
+
 app = Flask(__name__)
 app.secret_key = os.getenv('SECRET_KEY', 'fallback-secret-key-change-in-production')
 
@@ -20,26 +23,22 @@ def async_route(f):
     """Decorator to handle async routes in Flask"""
     @wraps(f)
     def wrapper(*args, **kwargs):
-        try:
-            loop = asyncio.get_event_loop()
-        except RuntimeError:
-            loop = asyncio.new_event_loop()
-            asyncio.set_event_loop(loop)
-        
-        if loop.is_running():
-            # If loop is already running, create a new task
-            import concurrent.futures
-            with concurrent.futures.ThreadPoolExecutor() as executor:
-                future = executor.submit(asyncio.run, f(*args, **kwargs))
-                return future.result()
-        else:
-            return loop.run_until_complete(f(*args, **kwargs))
+        return asyncio.run(f(*args, **kwargs))
     return wrapper
 
 async def ensure_connected():
-    """Ensure database is connected"""
-    if not db.is_connected():
-        await db.connect()
+    """Ensure database is connected with retry logic"""
+    max_retries = 3
+    for attempt in range(max_retries):
+        try:
+            if not db.is_connected():
+                await db.connect()
+            return
+        except Exception as e:
+            print(f"Database connection attempt {attempt + 1} failed: {e}")
+            if attempt == max_retries - 1:
+                raise
+            await asyncio.sleep(1)
 
 async def get_stats():
     """Calculate real statistics from database"""
