@@ -1,5 +1,4 @@
-flask==2.3.3
+Flask==2.3.3
 python-dotenv==1.0.0
-psycopg2-binary==2.9.7
-gunicorn
-prisma
+prisma==0.11.0
+asyncio-compat==0.1.2

