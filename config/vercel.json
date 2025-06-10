@@ -3,7 +3,10 @@
   "builds": [
     {
       "src": "app.py",
-      "use": "@vercel/python"
+      "use": "@vercel/python",
+      "config": {
+        "maxLambdaSize": "15mb"
+      }
     }
   ],
   "routes": [
@@ -11,8 +14,5 @@
       "src": "/(.*)",
       "dest": "app.py"
     }
-  ],
-  "env": {
-    "DATABASE_URL": "prisma+postgres://accelerate.prisma-data.net/?api_key=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJhcGlfa2V5IjoiMDFKWENUQldZNFI2S1dOVFJXWTNHU0Q5SDMiLCJ0ZW5hbnRfaWQiOiJkNjI0NWM2ZDM5Y2IxM2NhYzRkNjQ3NmI4ZDgxNTYyNjY4NzgwZTY3Yjk4ZWFkYjc4ZmU5OWJjNmYzMzk0NzdkIiwiaW50ZXJuYWxfc2VjcmV0IjoiYTFmNGQzMjctYmFlOC00NTRhLTkxNTUtOTNmMGY4ZmEyNWJhIn0.Io1Ok1wTGCnj_XmcYIRu4W_bJRCW7ZYx7QEaVf46Ol8"
-  }
+  ]
 }
