@@ -10,9 +10,7 @@ from functools import wraps
 # Load environment variables
 load_dotenv()
 
-app = Flask(__name__,
-            template_folder='../templates',
-            static_folder='../static')
+app = Flask(__name__)
 app.secret_key = os.getenv('SECRET_KEY', 'fallback-secret-key-change-in-production')
 
 # Initialize Prisma client
