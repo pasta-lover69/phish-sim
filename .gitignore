@@ -11,6 +11,10 @@ instance/
 
 # Environment variables
 .env
+.env.local
+.env.production
+
+# Virtual environments
 .venv
 env/
 venv/
@@ -33,10 +37,19 @@ Thumbs.db
 # Logs
 *.log
 
-# Database files (if you switch to SQLite later)
+# Database files
 *.db
 *.sqlite
+
+# Prisma
+prisma/migrations/
+.prisma/
 
 # Any backup files
 *.bak
 *.backup
+
+# Node modules (for Prisma)
+node_modules/
+package-lock.json
+yarn.lock
