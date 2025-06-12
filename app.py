@@ -3,8 +3,8 @@ import datetime
 import os
 import json
 import sys
+import subprocess
 from dotenv import load_dotenv
-from prisma import Prisma
 import asyncio
 from functools import wraps
 
@@ -14,6 +14,20 @@ load_dotenv()
 # Apply nest_asyncio for better asyncio support
 import nest_asyncio
 nest_asyncio.apply()
+
+# Handle Prisma import with error handling
+try:
+    from prisma import Prisma
+except ImportError:
+    print("Prisma client not found, attempting to generate...")
+    try:
+        subprocess.check_call(["python", "-m", "pip", "install", "prisma", "--upgrade"])
+        subprocess.check_call(["python", "-m", "prisma", "generate"])
+        from prisma import Prisma
+        print("Prisma client generated successfully.")
+    except Exception as e:
+        print(f"Error generating Prisma client: {e}")
+        raise
 
 app = Flask(__name__)
 app.secret_key = os.getenv('SECRET_KEY', 'fallback-secret-key-change-in-production')
@@ -30,13 +44,24 @@ def async_route(f):
 
 async def ensure_connected():
     """Ensure database is connected with retry logic"""
-    max_retries = 3
+    max_retries = 5  # Increased retries
     for attempt in range(max_retries):
         try:
-            # Vercel serverless functions need to reconnect on each invocation
-            if db.is_connected():
-                await db.disconnect()
-            await db.connect()
+            # Always disconnect first in serverless environment
+            try:
+                if db.is_connected():
+                    await db.disconnect()
+            except Exception:
+                pass  # Ignore disconnect errors
+                
+            # Check if DATABASE_URL is set
+            db_url = os.getenv('DATABASE_URL')
+            if not db_url:
+                raise Exception("DATABASE_URL environment variable is not set")
+                
+            # Connect with explicit timeout
+            await asyncio.wait_for(db.connect(), timeout=5.0)
+            print(f"Database connected successfully on attempt {attempt + 1}")
             return
         except Exception as e:
             print(f"Database connection attempt {attempt + 1} failed: {e}")
@@ -313,12 +338,30 @@ async def health():
     except Exception as e:
         db_status = f"error: {str(e)}"
     
+    # Get environment variables (with sensitive parts masked)
+    env_vars = {}
+    for key in ['VERCEL_ENV', 'VERCEL_REGION', 'PYTHON_VERSION', 'NODE_VERSION']:
+        env_vars[key] = os.environ.get(key, 'not set')
+        
+    # Check DATABASE_URL (but don't reveal password)
+    db_url = os.environ.get('DATABASE_URL', 'not set')
+    if db_url != 'not set':
+        # Replace password with asterisks
+        import re
+        masked_url = re.sub(r'(postgresql://[^:]+:)[^@]+(@.+)', r'\1*****\2', db_url)
+        env_vars['DATABASE_URL'] = masked_url
+    
+    # Check other environment variables existence
+    for key in ['SECRET_KEY', 'ADMIN_USERNAME', 'ADMIN_PASSWORD']:
+        env_vars[f"{key}_set"] = 'yes' if os.environ.get(key) else 'no'
+    
     return jsonify({
         'status': 'healthy',
         'timestamp': datetime.datetime.now().isoformat(),
-        'environment': os.environ.get('VERCEL_ENV', 'local'),
-        'database': db_status,
-        'python_version': '.'.join(map(str, sys.version_info[:3]))
+        'database_status': db_status,
+        'python_version': '.'.join(map(str, sys.version_info[:3])),
+        'environment': env_vars,
+        'prisma_version': os.environ.get('PRISMA_VERSION', 'unknown')
     })
 
 # Export the Flask app for Vercel
