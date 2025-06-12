@@ -1,0 +1,145 @@
+From e882173a36b70ef4bbedbad04a3abd0c4dc5a8bc Mon Sep 17 00:00:00 2001
+From: Ryan Deniega <103834718+SemiAutomat1c@users.noreply.github.com>
+Date: Thu, 12 Jun 2025 19:42:37 +0800
+Subject: [PATCH 2/2] Fix Vercel deployment issues and improve serverless
+ compatibility
+
+---
+ README.md   | 27 +++++++++++++++++++++++++++
+ app.py      | 24 ++++++++++++++++++++----
+ build.sh    |  9 +++++++++
+ vercel.json |  6 ++++--
+ 4 files changed, 60 insertions(+), 6 deletions(-)
+ create mode 100644 build.sh
+
+diff --git a/README.md b/README.md
+index 6b27326..43e5c3b 100644
+--- a/README.md
++++ b/README.md
+@@ -57,6 +57,33 @@ Access the admin panel at `http://localhost:5000/admin_login` with the credentia
+ 
+ This application is configured for deployment on Vercel using the provided `vercel.json` configuration.
+ 
++### Deploying to Vercel
++
++1. Create a Vercel account and install the Vercel CLI:
++```
++npm install -g vercel
++```
++
++2. Login to Vercel:
++```
++vercel login
++```
++
++3. Set up environment variables in Vercel:
++   - Go to your Vercel dashboard
++   - Select your project
++   - Go to Settings > Environment Variables
++   - Add the following variables:
++     - `DATABASE_URL`: Your PostgreSQL connection string (use Vercel Postgres or an external service)
++     - `SECRET_KEY`: A secure random string
++     - `ADMIN_USERNAME`: Admin username
++     - `ADMIN_PASSWORD`: Admin password
++
++4. Deploy the application:
++```
++vercel
++```
++
+ ## Important Note
+ 
+ This application is for educational purposes only. Do not use it for malicious activities. 
+\ No newline at end of file
+diff --git a/app.py b/app.py
+index dda99d1..e27d8a2 100644
+--- a/app.py
++++ b/app.py
+@@ -2,6 +2,7 @@ from flask import Flask, render_template, request, redirect, url_for, session, j
+ import datetime
+ import os
+ import json
++import sys
+ from dotenv import load_dotenv
+ from prisma import Prisma
+ import asyncio
+@@ -32,8 +33,10 @@ async def ensure_connected():
+     max_retries = 3
+     for attempt in range(max_retries):
+         try:
+-            if not db.is_connected():
+-                await db.connect()
++            # Vercel serverless functions need to reconnect on each invocation
++            if db.is_connected():
++                await db.disconnect()
++            await db.connect()
+             return
+         except Exception as e:
+             print(f"Database connection attempt {attempt + 1} failed: {e}")
+@@ -302,8 +305,21 @@ async def api_stats():
+ 
+ # Health check for Vercel
+ @app.route('/health')
+-def health():
+-    return jsonify({'status': 'healthy', 'timestamp': datetime.datetime.now().isoformat()})
++@async_route
++async def health():
++    try:
++        await ensure_connected()
++        db_status = "connected"
++    except Exception as e:
++        db_status = f"error: {str(e)}"
++    
++    return jsonify({
++        'status': 'healthy',
++        'timestamp': datetime.datetime.now().isoformat(),
++        'environment': os.environ.get('VERCEL_ENV', 'local'),
++        'database': db_status,
++        'python_version': '.'.join(map(str, sys.version_info[:3]))
++    })
+ 
+ # Export the Flask app for Vercel
+ application = app
+diff --git a/build.sh b/build.sh
+new file mode 100644
+index 0000000..c078624
+--- /dev/null
++++ b/build.sh
+@@ -0,0 +1,9 @@
++#!/bin/bash
++
++# Install dependencies
++pip install -r requirements.txt
++
++# Generate Prisma client
++prisma generate
++
++echo "Build completed successfully!" 
+\ No newline at end of file
+diff --git a/vercel.json b/vercel.json
+index 6d908bc..b5e2c92 100644
+--- a/vercel.json
++++ b/vercel.json
+@@ -5,7 +5,8 @@
+       "src": "app.py",
+       "use": "@vercel/python",
+       "config": {
+-        "maxLambdaSize": "15mb"
++        "maxLambdaSize": "15mb",
++        "buildCommand": "sh build.sh"
+       }
+     }
+   ],
+@@ -16,6 +17,7 @@
+     }
+   ],
+   "env": {
+-    "PYTHONPATH": "$PYTHONPATH:."
++    "PYTHONPATH": "$PYTHONPATH:.",
++    "DATABASE_URL": "${DATABASE_URL}"
+   }
+ }
+\ No newline at end of file
+-- 
+2.48.1.windows.1
+
