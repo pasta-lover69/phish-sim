@@ -57,6 +57,33 @@ Access the admin panel at `http://localhost:5000/admin_login` with the credentia
 
 This application is configured for deployment on Vercel using the provided `vercel.json` configuration.
 
+### Deploying to Vercel
+
+1. Create a Vercel account and install the Vercel CLI:
+```
+npm install -g vercel
+```
+
+2. Login to Vercel:
+```
+vercel login
+```
+
+3. Set up environment variables in Vercel:
+   - Go to your Vercel dashboard
+   - Select your project
+   - Go to Settings > Environment Variables
+   - Add the following variables:
+     - `DATABASE_URL`: Your PostgreSQL connection string (use Vercel Postgres or an external service)
+     - `SECRET_KEY`: A secure random string
+     - `ADMIN_USERNAME`: Admin username
+     - `ADMIN_PASSWORD`: Admin password
+
+4. Deploy the application:
+```
+vercel
+```
+
 ## Important Note
 
 This application is for educational purposes only. Do not use it for malicious activities. 
