@@ -10,7 +10,8 @@ from functools import wraps
 # Load environment variables
 load_dotenv()
 
-# Apply nest_asyncio for better asyncio supot
+# Apply nest_asyncio for better asyncio support
+import nest_asyncio
 nest_asyncio.apply()
 
 app = Flask(__name__)

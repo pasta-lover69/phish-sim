@@ -8,8 +8,8 @@ async def main():
     print("Database connected successfully!")
     print("Running migrations...")
     
-    # automatic na mag set up ng database if mag "prisma db push" ka
-     
+    # Database will be automatically set up when running "prisma db push"
+    
     await db.disconnect()
     print("Setup complete!")
 
