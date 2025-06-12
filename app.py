@@ -2,6 +2,7 @@ from flask import Flask, render_template, request, redirect, url_for, session, j
 import datetime
 import os
 import json
+import sys
 from dotenv import load_dotenv
 from prisma import Prisma
 import asyncio
@@ -10,7 +11,8 @@ from functools import wraps
 # Load environment variables
 load_dotenv()
 
-# Apply nest_asyncio for better asyncio supot
+# Apply nest_asyncio for better asyncio support
+import nest_asyncio
 nest_asyncio.apply()
 
 app = Flask(__name__)
@@ -31,8 +33,10 @@ async def ensure_connected():
     max_retries = 3
     for attempt in range(max_retries):
         try:
-            if not db.is_connected():
-                await db.connect()
+            # Vercel serverless functions need to reconnect on each invocation
+            if db.is_connected():
+                await db.disconnect()
+            await db.connect()
             return
         except Exception as e:
             print(f"Database connection attempt {attempt + 1} failed: {e}")
@@ -301,8 +305,21 @@ async def api_stats():
 
 # Health check for Vercel
 @app.route('/health')
-def health():
-    return jsonify({'status': 'healthy', 'timestamp': datetime.datetime.now().isoformat()})
+@async_route
+async def health():
+    try:
+        await ensure_connected()
+        db_status = "connected"
+    except Exception as e:
+        db_status = f"error: {str(e)}"
+    
+    return jsonify({
+        'status': 'healthy',
+        'timestamp': datetime.datetime.now().isoformat(),
+        'environment': os.environ.get('VERCEL_ENV', 'local'),
+        'database': db_status,
+        'python_version': '.'.join(map(str, sys.version_info[:3]))
+    })
 
 # Export the Flask app for Vercel
 application = app

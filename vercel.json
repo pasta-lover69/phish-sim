@@ -5,7 +5,8 @@
       "src": "app.py",
       "use": "@vercel/python",
       "config": {
-        "maxLambdaSize": "15mb"
+        "maxLambdaSize": "15mb",
+        "buildCommand": "sh build.sh"
       }
     }
   ],
@@ -16,6 +17,7 @@
     }
   ],
   "env": {
-    "PYTHONPATH": "$PYTHONPATH:."
+    "PYTHONPATH": "$PYTHONPATH:.",
+    "DATABASE_URL": "${DATABASE_URL}"
   }
 }
